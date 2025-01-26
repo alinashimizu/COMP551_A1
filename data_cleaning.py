@@ -13,35 +13,16 @@ heart_disease = fetch_ucirepo(id=45)
 X = heart_disease.data.features
 y = heart_disease.data.targets
 
-#metadata
-#print(heart_disease.metadata)
-
-#variable information
-#print(heart_disease.variables)
-
-#clean data - check for missing features
-
-#print("missing feature values:")
-#print(X.isna().sum())
-
-#print("missing target values")
-#print(y.isna().sum())
-
 #Option 1 - Drop missing values
-X_clean = X.dropna() # we could also do average here and compare
-y_clean = y.loc[X_clean.index]
-#print(X_clean.shape)
-#print(y_clean.shape)
+X_clean = X.copy().dropna() # we could also do average here and compare
+y_clean = y.copy().loc[X_clean.index]
 
 #Option 2 - Fill with average
-X_clean2 = X.fillna(X.mean())
-#print(X_clean)
-y_clean2 = y
-#y can stay the same because there are no missing target values
+X_clean2 = X.copy().fillna(X.mean())
+y_clean2 = y.copy() #y can stay the same because there are no missing target values
 
 
 #other cleaning processes to be completed: remove duplicates, outliers, invalid values
-#print("Check for outliers")
 #for some reason i couldnt include ca, but i got the other int features, also do we need to remove outliers?
 #X_clean.boxplot(column=['age', 'trestbps', 'chol', 'thalach', 'oldpeak'])
 #plt.show()
@@ -56,7 +37,6 @@ duplicates = X_clean.duplicated().sum()
 
 #Compute basic statistics
 pos_indices = y_clean[y_clean['num'].isin([1, 2, 3, 4])].index
-#print(pos_indices)
 X_pos = X_clean.loc[pos_indices]
 mean_pos = X_pos.mean()
 #print(f"Means of features for people with heart disease\n{mean_pos}")
@@ -74,6 +54,8 @@ mean_sqd_diff = (mean_pos - mean_neg) ** 2
 msd_ranked = mean_sqd_diff.sort_values(ascending=False)
 #print("Mean squared differnce of features for people with and without heart disease")
 #print(msd_ranked)
+
+#Remove unecessary features 
 
 #***DATASET 2 - Penguin Dataset for Multi-Class***
 data = pd.read_csv('/Users/alinashimizu/Downloads/penguins_size.csv')
@@ -93,7 +75,7 @@ y_penguin_clean = y_penguin.copy().loc[X_penguin_clean.index]
 
 #Option 2 - Fill NA rows with average 
 X_penguin_clean2 = X_penguin.copy()
-numeric_columns = ['culmen_length_mm', 'culmen_depth_mm', 'flipper_length_mm']
+numeric_columns = ['culmen_length_mm', 'culmen_depth_mm', 'flipper_length_mm', 'body_mass_g']
 X_penguin_clean2[numeric_columns] = X_penguin_clean2[numeric_columns].fillna(X_penguin_clean2[numeric_columns].mean())
 #handle sex column differently 
 X_penguin_clean2['sex'] = X_penguin_clean2['sex'].fillna(X_penguin_clean2['sex'].mode().iloc[0])
@@ -102,6 +84,7 @@ y_penguin_clean2 = y_penguin.copy()
 #y can stay the same because there are no missing target values
 
 #other cleaning processes to be completed: remove duplicates, outliers, invalid values
+
 #X_penguin_clean2.boxplot(column=numeric_columns)
 #plt.show()
 #this was hard to visualize since the numbers are on very different scales, but could go back and normalize 
@@ -113,31 +96,34 @@ cleaned_penguin_data = pd.concat([X_penguin_clean2, y_penguin_clean2], axis=1)
 
 #helper function for multi-class stats 
 def penguin_stats(group):
-    stats = group.mean(numeric_only=True) 
-    stats['sex'] = group['sex'].mode()[0] 
+    all_stats = group.describe(include='all')
+    numeric_all = all_stats.loc[['mean', 'std', 'min', 'max'], numeric_columns]
+    sex_mode = group['sex'].mode()
+    sex_mode = sex_mode.iloc[0]
+    stats = numeric_all.transpose()  #needed to transpose to get columns as stats 
+    stats['sex_mode'] = sex_mode
     return stats
 
 grouped_stats = cleaned_penguin_data.groupby('species').apply(penguin_stats)
 
-print(grouped_stats)
-
 #compute all the squared differences 
 squared_differences = {}
 
-#sum of squared differences, should also maybe do pairwise differences 
+#sum of squared differences, should also maybe do pairwise differences
+#NORMALIZE
+means = grouped_stats.reset_index().pivot(index='species', columns='level_1', values='mean')
 
-for col in X_penguin_clean2.columns:
-    means = grouped_stats[col]
+for col in numeric_columns:
     diff_sum = 0
-    for i in range(len(means)):
-        for j in range(i + 1, len(means)):
-            diff_sum += (means.iloc[i] - means.iloc[j]) ** 2 #squared difference between group means
-    squared_differences[col] = diff_sum
+    group_means = means[col] 
+    for i in range(len(group_means)):
+        for j in range(i + 1, len(group_means)):
+            diff_sum += (group_means.iloc[i] - group_means.iloc[j]) ** 2
+    squared_differences[col] = diff_sum  
 
 rank_features = sorted(squared_differences.items(), key=lambda x: x[1], reverse=True)
 
-print("Ranked Features")
 for feature, score in rank_features:
     print(f"{feature}: {score}")
 
-
+#Drop unecessary features 
